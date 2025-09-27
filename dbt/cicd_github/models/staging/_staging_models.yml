@@ -1,0 +1,15 @@
+
+version: 2
+
+models:
+  - name: model_1
+    description: "model 1"
+    columns:
+      - name: id
+        description: "The primary key for this table"
+        config:
+          meta:
+            primary_key: true
+        data_tests:
+          - unique
+          - not_null
