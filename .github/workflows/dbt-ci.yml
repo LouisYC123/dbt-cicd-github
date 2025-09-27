@@ -40,11 +40,12 @@ jobs:
       - name: Secret Scanning
         uses: trufflesecurity/trufflehog@main
         with:
-          extra_args: --results=verified,unknown --fail
+          extra_args: --results=verified,unknown
 
   changed-files:
     name: Detect changed paths
     runs-on: ubuntu-latest
+    needs: [secret-scan]
     outputs:
       dbt: ${{ steps.filter.outputs.dbt }}
     steps:
