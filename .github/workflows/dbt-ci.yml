@@ -16,7 +16,7 @@ permissions:
 
 env:
   DBT_VERSION: "1.9.4"
-  DDP_NAME: cicd_gitlab
+  DDP_NAME: cicd_github
   DBT_CI_DATABASE: ${{ secrets.DBT_CI_DATABASE }}
   DBT_CICD_ROLE: ${{ secrets.DBT_CICD_ROLE }}
 
