@@ -1,0 +1,32 @@
+repos:
+  - repo: https://github.com/psf/black
+    rev: 25.1.0 
+    hooks:
+      - id: black
+        stages: [pre-commit]
+        language_version: python3.12.4
+  - repo: local
+    hooks:
+      - id: pytest
+        stages: [pre-commit]
+        name: pytest tests
+        entry: pytest
+        language: system  # Uses the system's Python environment
+        types: [python]
+        pass_filenames: false  # Avoids passing changed files as args
+  - repo: https://github.com/sqlfluff/sqlfluff
+    rev: 3.4.0
+    hooks:
+      - id: sqlfluff-lint
+        name: SQLFluff Lint
+        entry: sqlfluff lint
+        language: system
+        types: [sql]
+        stages: [pre-commit]
+
+      - id: sqlfluff-fix
+        name: SQLFluff Fix
+        entry: sqlfluff fix --force
+        language: system
+        types: [sql]
+        stages: [pre-commit]
