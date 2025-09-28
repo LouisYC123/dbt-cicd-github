@@ -1,0 +1,27 @@
+cicd_github:      # must match dbt_project.yml → profile
+  target: dev     # default target
+  outputs:
+    dev:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      password: "{{ env_var('SNOWFLAKE_PASSWORD') }}"
+      private_key_path: ./secrets/rsa_key.p8
+      private_key_passphrase: "{{ env_var('SNOWFLAKE_PASSPHRASE') }}"
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
+      role: "{{ env_var('SNOWFLAKE_ROLE') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE') }}"
+      database: "{{ env_var('SNOWFLAKE_DATABASE') }}"
+      schema: "{{ env_var('SNOWFLAKE_SCHEMA') }}"
+      threads:  4
+    ci_staging:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('DBT_CICD_USER') }}"
+      private_key: "{{ env_var('SNOWFLAKE_PRIVATE_KEY') }}"
+      private_key_passphrase: "{{ env_var('SNOWFLAKE_PASSPHRASE') }}"
+      role: "{{ env_var('DBT_CICD_ROLE') }}" 
+      database: "{{ env_var('DBT_CI_DATABASE') }}" 
+      schema: "{{ env_var('DBT_CI_SCHEMA') }}" 
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE') }}"
+      threads: 6
+      

@@ -1,0 +1,147 @@
+name: dbt CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  # Adds a manual “Run workflow” button in the Actions tab
+  workflow_dispatch: 
+
+# Cancel older runs of the same branch/PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  DBT_VERSION: "1.9.4"
+  DDP_NAME: cicd_github
+  DBT_CI_DATABASE: ${{ secrets.DBT_CI_DATABASE }}
+  DBT_CI_SCHEMA: ${{ secrets.DBT_CI_SCHEMA }}
+  SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+  DBT_CICD_ROLE: ${{ secrets.DBT_CICD_ROLE }}
+  SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+  DBT_CICD_USER: ${{ secrets.DBT_CICD_USER }}
+  SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+  SNOWFLAKE_PRIVATE_KEY: ${{ secrets.SNOWFLAKE_PRIVATE_KEY }}
+  SNOWFLAKE_PASSPHRASE: ${{ secrets.SNOWFLAKE_PASSPHRASE }}
+
+jobs:
+
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Secret Scanning
+        uses: trufflesecurity/trufflehog@main
+        with:
+          extra_args: --results=verified,unknown
+
+  changed-files:
+    name: Detect changed dbt files
+    runs-on: ubuntu-latest
+    needs: [secret-scan]
+    outputs:
+      dbt: ${{ steps.filter.outputs.dbt }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          # True if anything in dbt/** changed
+          filters: |
+            dbt:
+              - 'dbt/**'
+
+  check-branch:
+    name: Check PR branch is up to date with base
+    runs-on: ubuntu-latest
+    needs: [changed-files]
+    if: ${{ github.event_name == 'pull_request' }}
+    steps:
+      # Check out the PR HEAD commit (not the auto-merge) with full history
+      - name: Checkout PR HEAD
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Verify branch is up to date with base
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARGET_BRANCH="${{ github.event.pull_request.base.ref }}"
+          git fetch origin "+refs/heads/${TARGET_BRANCH}:refs/remotes/origin/${TARGET_BRANCH}"
+          if git merge-base --is-ancestor "origin/${TARGET_BRANCH}" HEAD; then
+            echo "✅ Branch is up to date with ${TARGET_BRANCH}."
+          else
+            echo "❌ Branch is behind ${TARGET_BRANCH}. Please merge or rebase."
+            exit 1
+          fi
+
+  create-ci-db:
+    name: Create CI database
+    runs-on: ubuntu-latest
+    needs: [changed-files, check-branch]
+    # Only when dbt/** changed
+    if: ${{ github.event_name == 'pull_request' && needs.changed-files.outputs.dbt == 'true' }}
+    env:
+      DBT_CI_DATABASE: ${{ secrets.DBT_CI_DATABASE }}
+      DBT_CICD_ROLE: ${{ secrets.DBT_CICD_ROLE }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.4"
+      - name: Install dbt-snowflake
+        run: pip install "dbt-snowflake==${DBT_VERSION}"
+      - name: dbt deps
+        working-directory: dbt/${{ env.DDP_NAME }}
+        run: dbt deps
+      - name: Create CI database
+        working-directory: dbt/${{ env.DDP_NAME }}
+        shell: bash
+        run: |
+          dbt run-operation create_database \
+            --args "{
+              'database_name': '$DBT_CI_DATABASE',
+              'retention': 0,
+              'transient': True,
+              'grant_to_role': '$DBT_CICD_ROLE'
+            }" \
+            --target ci_staging
+
+  drop-ci-db:
+    name: Drop CI database
+    runs-on: ubuntu-latest
+    needs: [changed-files, create-ci-db]
+    # Run even if previous jobs failed/skipped, but only when dbt/** changed, or if PR was closed
+    if: ${{ github.event_name == 'pull_request' && (github.event.action == 'closed' || always()) }}
+    env:
+      DBT_CI_DATABASE: ${{ secrets.DBT_CI_DATABASE }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.4"
+      - name: Install dbt-snowflake
+        run: pip install "dbt-snowflake==${{ env.DBT_VERSION }}"
+      - name: dbt deps
+        working-directory: dbt/${{ env.DDP_NAME }}
+        run: dbt deps
+      - name: Drop CI database
+        working-directory: dbt/${{ env.DDP_NAME }}
+        run: |
+          dbt run-operation drop_database \
+            --args "{'database_name': '$DBT_CI_DATABASE'}" \
+            --target ci_staging

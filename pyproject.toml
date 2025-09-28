@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dbt_cicd_tools"
+version = "0.1.0"
+description = "A toolkit for building dbt-powered data products in snowflake"
+authors = [
+    { name = "Louis Gare"}
+]
+readme = "README.md"
+requires-python = ">=3.10.4,<=3.12.4"
+
+dependencies = [
+    "ipykernel==6.29.5",
+    "python-dotenv==1.1.0",
+    "pytest==8.3.5",
+    "black==25.1.0",
+    "dbt-snowflake==1.9.4",
+    "astronomer-cosmos[snowflake]==1.2.0",
+    "pre-commit==4.2.0",
+    "sqlfluff==3.4.0",
+    "sqlfluff-templater-dbt==3.4.0",
+]
+
+[tool.setuptools]
+packages = { find = { where = ["."] } }
