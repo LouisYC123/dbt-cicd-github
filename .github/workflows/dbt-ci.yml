@@ -137,9 +137,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: [check-branch, changed-files]
     if: ${{ github.event_name == 'pull_request' && needs.changed-files.outputs.dbt == 'true' }}
-    env:
-      DBT_PROJECT_DIR: dbt/${{ env.DDP_NAME }}
-      DBT_PROFILES_DIR: ${{ github.workspace }}/dbt/${{ env.DDP_NAME }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
