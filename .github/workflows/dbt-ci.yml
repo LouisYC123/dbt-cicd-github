@@ -6,9 +6,9 @@ on:
   # Adds a manual “Run workflow” button in the Actions tab
   workflow_dispatch: 
 
-# Cancel older runs of the same branch/PR
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
+  # Cancel older runs of the same branch/PR
   cancel-in-progress: true
 
 permissions:
@@ -118,6 +118,40 @@ jobs:
               'grant_to_role': '$DBT_CICD_ROLE'
             }" \
             --target ci_staging
+
+  lint-python:
+    name: Lint Python
+    runs-on: ubuntu-latest
+    needs: [check-branch]
+    if: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.4"
+      - run: pip install black==25.1.0
+      - run: black --check .
+
+  lint-sql:
+    name: Lint SQL 
+    runs-on: ubuntu-latest
+    needs: [check-branch, changed-files]
+    if: ${{ github.event_name == 'pull_request' && needs.changed-files.outputs.dbt == 'true' }}
+    env:
+      DBT_PROJECT_DIR: dbt/${{ env.DDP_NAME }}
+      DBT_PROFILES_DIR: ${{ github.workspace }}/dbt/${{ env.DDP_NAME }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.4"
+      - run: pip install --upgrade pip
+      - run: pip install "dbt-snowflake==${{ env.DBT_VERSION }}" sqlfluff sqlfluff-templater-dbt
+      - name: dbt deps
+        working-directory: ${{ env.DBT_PROJECT_DIR }}
+        run: dbt deps --target ci_staging --profiles-dir $DBT_PROJECT_DIR
+      - name: SQLFluff lint
+        run: sqlfluff lint . --templater dbt --dialect snowflake --config cicd/.sqlfluff
 
   drop-ci-db:
     name: Drop CI database
