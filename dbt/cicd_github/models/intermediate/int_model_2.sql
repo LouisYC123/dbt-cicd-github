@@ -2,5 +2,5 @@
 
 
 select *
-from {{ ref('model_1') }}
+from {{ ref('stg_model_1') }}
 where id = 1
